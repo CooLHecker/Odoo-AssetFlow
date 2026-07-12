@@ -13,11 +13,26 @@ router.get("/", (req, res) => {
 
 // GET /api/health/db -> verifies MySQL connectivity
 router.get("/db", async (req, res) => {
+  const config = {
+    host: process.env.DB_HOST || "(not set)",
+    port: process.env.DB_PORT || "(not set, defaults to 3306)",
+    user: process.env.DB_USER || "(not set)",
+    database: process.env.DB_NAME || "(not set)",
+    ssl: process.env.DB_SSL || "(not set)",
+    passwordSet: !!process.env.DB_PASSWORD,
+  };
   try {
     const [rows] = await pool.query("SELECT 1 AS ok");
-    res.json({ status: "ok", db: "connected", result: rows[0] });
+    res.json({ status: "ok", db: "connected", result: rows[0], config });
   } catch (err) {
-    res.status(500).json({ status: "error", db: "not connected", message: err.message });
+    res
+      .status(500)
+      .json({
+        status: "error",
+        db: "not connected",
+        message: err.message,
+        config,
+      });
   }
 });
 
