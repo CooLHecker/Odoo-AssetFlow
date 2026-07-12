@@ -6,6 +6,16 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -22,3 +32,79 @@
   background: rgba(148, 163, 184, 0.5);
 }
 
+.theme-dark,
+html.theme-dark,
+body.theme-dark {
+  color-scheme: dark;
+}
+
+html.theme-dark,
+body.theme-dark,
+body.theme-dark #root {
+  background-color: #020617;
+  color: #e2e8f0;
+}
+
+.theme-dark .bg-white {
+  background-color: #0f172a !important;
+}
+
+.theme-dark .bg-slate-50,
+.theme-dark .bg-slate-100 {
+  background-color: #020617 !important;
+}
+
+.theme-dark .text-slate-800,
+.theme-dark .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+.theme-dark .text-slate-600,
+.theme-dark .text-slate-500,
+.theme-dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.theme-dark .border-slate-100,
+.theme-dark .border-slate-200,
+.theme-dark .border-slate-300 {
+  border-color: #1e293b !important;
+}
+
+.theme-dark .bg-slate-200 {
+  background-color: #1e293b !important;
+}
+
+.theme-dark .hover\:bg-slate-100:hover,
+.theme-dark .hover\:bg-slate-200:hover {
+  background-color: #1e293b !important;
+}
+
+.theme-dark .hover\:text-slate-600:hover,
+.theme-dark .hover\:text-slate-800:hover {
+  color: #f8fafc !important;
+}
+
+.theme-dark .hover\:border-slate-300:hover {
+  border-color: #334155 !important;
+}
+
+.theme-dark .focus\:bg-white:focus,
+.theme-dark .focus\:bg-slate-50:focus {
+  background-color: #0f172a !important;
+}
+
+.theme-dark .ring-white {
+  --tw-ring-color: #0f172a !important;
+}
+
+.theme-dark input,
+.theme-dark select,
+.theme-dark textarea {
+  color: #e2e8f0;
+}
+
+.theme-dark input::placeholder,
+.theme-dark textarea::placeholder {
+  color: #64748b;
+}

@@ -3,88 +3,129 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
-import { 
-  ShieldCheck, 
-  Lock, 
-  Mail, 
+import React, { useMemo, useState } from "react";
+import {
+  ShieldCheck,
+  Mail,
   ArrowRight,
   Server,
+  KeyRound,
+  Send,
+  RefreshCw,
 } from "lucide-react";
-import { UserProfile, UserRoleCode } from "../types";
-import { api, setToken } from "../api";
-
-const ROLE_LABELS: Record<UserRoleCode, string> = {
-  EMPLOYEE: "Employee",
-  DEPARTMENT_HEAD: "Department Head",
-  ASSET_MANAGER: "Asset Manager",
-  ADMIN: "Administrator",
-};
-
-interface BackendUser {
-  id: number;
-  name: string;
-  email: string;
-  role: UserRoleCode;
-  department: string | null;
-  status: string;
-}
-
-interface LoginResponse {
-  token: string;
-  user: BackendUser;
-}
+import { UserProfile } from "../types";
 
 interface LoginScreenProps {
   onLoginSuccess: (user: UserProfile) => void;
-  onGoToSignup: () => void;
+  defaultUser: UserProfile;
 }
 
-function toUserProfile(u: BackendUser): UserProfile {
-  return {
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: ROLE_LABELS[u.role] ?? u.role,
-    roleCode: u.role,
-    department: u.department ?? "Unassigned",
-    avatar: "",
-  };
-}
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
-export default function LoginScreen({ onLoginSuccess, onGoToSignup }: LoginScreenProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+type AuthStep = "request" | "verify";
+
+export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreenProps) {
+  const [email, setEmail] = useState("admin@assetflow.com");
+  const [code, setCode] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [infoMsg, setInfoMsg] = useState("");
+  const [step, setStep] = useState<AuthStep>("request");
+
+  const submitLabel = useMemo(() => {
+    if (isLoading && step === "request") return "Sending verification email...";
+    if (isLoading && step === "verify") return "Validating code...";
+    return step === "request" ? "Send verification code" : "Verify & continue";
+  }, [isLoading, step]);
+
+  const buildFallbackUser = (userEmail: string): UserProfile => ({
+    ...defaultUser,
+    email: userEmail,
+  });
+
+  const requestCode = async () => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/request-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to send verification code.");
+    }
+
+    setStep("verify");
+    setInfoMsg(`A verification code was sent to ${email}.`);
+    setErrorMsg("");
+  };
+
+  const verifyCode = async () => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/verify-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || "Unable to verify authentication code.");
+    }
+
+    const resolvedUser: UserProfile = {
+      ...buildFallbackUser(email),
+      ...(data.user || {}),
+      email,
+    };
+
+    if (rememberMe) {
+      localStorage.setItem("assetflow_auth_email", email);
+    } else {
+      localStorage.removeItem("assetflow_auth_email");
+    }
+
+    onLoginSuccess(resolvedUser);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setIsLoading(true);
+
     try {
-      const { token, user } = await api.post<LoginResponse>("/api/auth/login", { email, password });
-      setToken(token);
-      onLoginSuccess(toUserProfile(user));
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Login failed. Please try again.");
+      if (step === "request") {
+        await requestCode();
+      } else {
+        await verifyCode();
+      }
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : "Authentication failed.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handlePreFill = (role: "admin" | "auditor") => {
+    setErrorMsg("");
+    setInfoMsg("");
+    setCode("");
+    setStep("request");
+
+    if (role === "admin") {
+      setEmail("admin@assetflow.com");
+    } else {
+      setEmail("auditor.compliance@assetflow.com");
+    }
+  };
+
   return (
     <div id="login-container" className="min-h-screen bg-slate-950 flex items-center justify-center p-4 sm:p-6 font-sans selection:bg-teal-500 selection:text-slate-950">
-      {/* Background ambient glows */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
       <div className="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col md:flex-row relative z-10">
-        
-        {/* Left pane: Brand Illustration & Info */}
         <div className="w-full md:w-1/2 bg-slate-950/80 p-8 sm:p-12 border-b md:border-b-0 md:border-r border-slate-800/80 flex flex-col justify-between">
-          
-          {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="bg-teal-500/10 p-2 rounded-lg border border-teal-500/30">
               <ShieldCheck className="h-6 w-6 text-teal-400" />
@@ -95,38 +136,47 @@ export default function LoginScreen({ onLoginSuccess, onGoToSignup }: LoginScree
             </div>
           </div>
 
-          {/* Slogan */}
           <div className="my-12">
             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight leading-tight">
-              Enterprise Asset <br className="hidden sm:inline" />
-              Management. <span className="text-teal-400">Reimagined.</span>
+              Passwordless Enterprise Access. <span className="text-teal-400">Email Verified.</span>
             </h2>
             <p className="text-slate-400 text-sm mt-3 leading-relaxed">
-              Track, allocate, maintain, and audit organizational physical assets, fleet vehicles, and digital equipment with cryptographic precision.
+              Sign in with your work email and receive a one-time verification code. No shared demo password required.
             </p>
+
+            <div className="grid grid-cols-3 gap-3 mt-8">
+              <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 font-mono block uppercase">Auth Mode</span>
+                <span className="text-base font-bold text-white font-mono mt-1 block">Email OTP</span>
+              </div>
+              <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 font-mono block uppercase">Expiry</span>
+                <span className="text-base font-bold text-emerald-400 font-mono mt-1 block">10 min</span>
+              </div>
+              <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                <span className="text-[10px] text-slate-500 font-mono block uppercase">Delivery</span>
+                <span className="text-base font-bold text-teal-400 font-mono mt-1 block">SMTP</span>
+              </div>
+            </div>
           </div>
 
-          {/* Footer of login branding */}
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <Server className="h-3.5 w-3.5" />
             <span>Secure TLS 1.3 Encryption Active</span>
           </div>
-
         </div>
 
-        {/* Right pane: authentication form */}
         <div className="w-full md:w-1/2 p-8 sm:p-12 bg-slate-900/40 flex flex-col justify-center">
-          
           <div className="mb-6">
             <h3 className="text-xl font-bold text-white tracking-tight">Identity Verification</h3>
             <p className="text-slate-400 text-xs mt-1">
-              Enter your credentials to log in.
+              {step === "request"
+                ? "Enter your work email to receive a one-time verification code."
+                : "Enter the 6-digit code from your inbox to complete sign-in."}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            
-            {/* Email field */}
             <div className="space-y-1.5">
               <label htmlFor="email-input" className="text-xs font-semibold text-slate-300">
                 Work Email Address
@@ -145,38 +195,76 @@ export default function LoginScreen({ onLoginSuccess, onGoToSignup }: LoginScree
               </div>
             </div>
 
-            {/* Password field */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label htmlFor="password-input" className="text-xs font-semibold text-slate-300">
-                  Password
-                </label>
-                <a href="#forgot" onClick={(e) => { e.preventDefault(); alert("Forgot-password self-service is coming in a later build. Contact your Admin to reset your password for now."); }} className="text-[10px] font-mono text-teal-400 hover:underline">
-                  Forgot?
-                </a>
+            {step === "verify" && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="code-input" className="text-xs font-semibold text-slate-300">
+                    Verification Code
+                  </label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setErrorMsg("");
+                      setInfoMsg("");
+                      setIsLoading(true);
+                      try {
+                        await requestCode();
+                      } catch (error) {
+                        setErrorMsg(error instanceof Error ? error.message : "Unable to resend verification code.");
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    className="text-[10px] font-mono text-teal-400 hover:underline inline-flex items-center gap-1"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Resend code
+                  </button>
+                </div>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                  <input
+                    id="code-input"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength={6}
+                    required
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="6-digit code"
+                    className="w-full bg-slate-950/60 border border-slate-800 hover:border-slate-700 focus:border-teal-500 rounded-lg py-2 pl-9 pr-4 text-sm tracking-[0.35em] text-white placeholder-slate-500 focus:outline-none transition-all"
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            )}
+
+            <div className="flex items-center justify-between text-xs py-1">
+              <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
                 <input
-                  id="password-input"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full bg-slate-950/60 border border-slate-800 hover:border-slate-700 focus:border-teal-500 rounded-lg py-2 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none transition-all"
+                  id="remember-me-checkbox"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="accent-teal-500 h-3.5 w-3.5 rounded border-slate-800 bg-slate-950 text-teal-500 focus:ring-0 focus:ring-offset-0"
                 />
-              </div>
+                Remember this device
+              </label>
+              <span className="text-slate-500">OTP Enabled</span>
             </div>
 
-            {/* Error Message */}
+            {infoMsg && (
+              <div className="p-3 bg-teal-500/10 border border-teal-500/20 text-teal-300 text-xs rounded-lg font-medium">
+                {infoMsg}
+              </div>
+            )}
+
             {errorMsg && (
               <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-lg font-medium">
                 {errorMsg}
               </div>
             )}
 
-            {/* Submit Button */}
             <button
               id="login-submit-button"
               type="submit"
@@ -189,33 +277,49 @@ export default function LoginScreen({ onLoginSuccess, onGoToSignup }: LoginScree
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Verifying...
+                  {submitLabel}
+                </>
+              ) : step === "request" ? (
+                <>
+                  <Send className="h-4 w-4" />
+                  {submitLabel}
                 </>
               ) : (
                 <>
-                  Verify & Continue
+                  {submitLabel}
                   <ArrowRight className="h-4 w-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Signup link */}
-          <div className="mt-8 pt-6 border-t border-slate-800 text-center">
-            <span className="text-xs text-slate-400">Don't have an account? </span>
-            <button
-              id="go-to-signup-button"
-              type="button"
-              onClick={onGoToSignup}
-              className="text-xs font-semibold text-teal-400 hover:underline cursor-pointer"
-            >
-              Create one
-            </button>
+          <div className="mt-8 pt-6 border-t border-slate-800">
+            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">
+              Sandbox Testing Emails
+            </span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                id="prefill-admin-btn"
+                type="button"
+                onClick={() => handlePreFill("admin")}
+                className="bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-md text-xs text-slate-300 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <div className="h-1.5 w-1.5 rounded-full bg-teal-400"></div>
+                Admin Manager
+              </button>
+              <button
+                id="prefill-auditor-btn"
+                type="button"
+                onClick={() => handlePreFill("auditor")}
+                className="bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-md text-xs text-slate-300 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <div className="h-1.5 w-1.5 rounded-full bg-violet-400"></div>
+                Auditor Compliance
+              </button>
+            </div>
           </div>
-
         </div>
       </div>
     </div>
   );
 }
-
