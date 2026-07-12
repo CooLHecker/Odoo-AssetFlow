@@ -143,7 +143,7 @@ export default function TopNavBar({
           <img 
             src={user.avatar} 
             alt={user.name} 
-            className="h-8.5 w-8.5 rounded-full object-cover ring-2 ring-teal-500/20"
+            className="h-0 w-0 rounded-full object-cover ring-2 ring-teal-500/20"
             referrerPolicy="no-referrer"
           />
         </div>
