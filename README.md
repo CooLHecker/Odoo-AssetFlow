@@ -56,7 +56,7 @@ Odoo-AssetFlow/
 
 
 
-Visit [`http://localhost:3000`.](https://odoo-asset-flow-zx6t.vercel.app/)
+Visit https://odoo-asset-flow-zx6t.vercel.app/
 
 ---
 
