@@ -3,9 +3,6 @@ const cors = require("cors");
 require("dotenv").config();
 
 const healthRoutes = require("./routes/health.routes");
-const assetsRoutes = require("./routes/assets.routes");
-const bookingsRoutes = require("./routes/bookings.routes");
-const notificationsRoutes = require("./routes/notifications.routes");
 const stubRouter = require("./routes/stub.routes");
 
 const app = express();
@@ -22,20 +19,18 @@ app.get("/", (req, res) => {
 // Core
 app.use("/api/health", healthRoutes);
 
-// Live modules
-app.use("/api/assets", assetsRoutes);
-app.use("/api/bookings", bookingsRoutes);
-app.use("/api/notifications", notificationsRoutes);
-
-// Feature modules — still stubbed, build these out next
+// Feature modules — stubbed for now, build these out one by one
 app.use("/api/auth", stubRouter("auth"));
 app.use("/api/departments", stubRouter("departments"));
 app.use("/api/categories", stubRouter("asset-categories"));
 app.use("/api/employees", stubRouter("employees"));
+app.use("/api/assets", stubRouter("assets"));
 app.use("/api/allocations", stubRouter("allocations"));
+app.use("/api/bookings", stubRouter("bookings"));
 app.use("/api/maintenance", stubRouter("maintenance"));
 app.use("/api/audits", stubRouter("audits"));
 app.use("/api/reports", stubRouter("reports"));
+app.use("/api/notifications", stubRouter("notifications"));
 
 // 404 handler
 app.use((req, res) => {
