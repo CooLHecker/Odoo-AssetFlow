@@ -133,7 +133,7 @@ export default function TopNavBar({
           </button>
 
           <a
-            href="https://ai.studio/build"
+            href="https://github.com/Karmanya-Jakhotia"
             target="_blank"
             rel="noreferrer"
             className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 rounded-lg transition-colors"
