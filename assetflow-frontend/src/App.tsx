@@ -5,7 +5,6 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  INITIAL_USER,
   INITIAL_DEPARTMENTS,
   INITIAL_CATEGORIES,
   INITIAL_EMPLOYEES,
@@ -19,14 +18,16 @@ import {
   Reservation,
   NotificationItem,
   ActivityLog,
-  UserProfile
+  UserProfile,
+  UserRoleCode
 } from "./types";
-import { api } from "./api";
+import { api, getToken, clearToken } from "./api";
 
 // Import Modular Screen Components
 import Sidebar from "./components/Sidebar";
 import TopNavBar from "./components/TopNavBar";
 import LoginScreen from "./components/LoginScreen";
+import SignupScreen from "./components/SignupScreen";
 import DashboardScreen from "./components/DashboardScreen";
 import AssetDirectoryScreen from "./components/AssetDirectoryScreen";
 import AssetAllocationScreen from "./components/AssetAllocationScreen";
@@ -36,17 +37,29 @@ import ActivityLogsScreen from "./components/ActivityLogsScreen";
 import NotificationsScreen from "./components/NotificationsScreen";
 import SettingsScreen from "./components/SettingsScreen";
 
-export default function App() {
-  // Session Authentication state (still local/mock — auth screen not wired up yet)
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    const saved = localStorage.getItem("assetflow_logged_in");
-    return saved === "true";
-  });
+const ROLE_LABELS: Record<UserRoleCode, string> = {
+  EMPLOYEE: "Employee",
+  DEPARTMENT_HEAD: "Department Head",
+  ASSET_MANAGER: "Asset Manager",
+  ADMIN: "Administrator",
+};
 
-  const [user, setUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem("assetflow_user");
-    return saved ? JSON.parse(saved) : INITIAL_USER;
-  });
+interface MeResponse {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRoleCode;
+  department: string | null;
+  status: string;
+}
+
+export default function App() {
+  // Session Authentication state — backed by a real JWT issued by /api/auth,
+  // not a fake localStorage flag. `authChecked` gates rendering until we've
+  // confirmed whether an existing token is still valid.
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authView, setAuthView] = useState<"login" | "signup">("login");
 
   // Live data — now fetched from the backend/MySQL instead of mock + localStorage
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -80,6 +93,38 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<string>("dashboard");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // On first load, if a token is already stored, validate it against the
+  // backend (GET /api/auth/me) rather than trusting it blindly — this way a
+  // token that's expired, or belongs to a now-deactivated user, gets kicked
+  // back to the login screen instead of showing a stale session.
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      setAuthChecked(true);
+      return;
+    }
+    api
+      .get<MeResponse>("/api/auth/me")
+      .then((me) => {
+        setUser({
+          id: me.id,
+          name: me.name,
+          email: me.email,
+          role: ROLE_LABELS[me.role] ?? me.role,
+          roleCode: me.role,
+          department: me.department ?? "Unassigned",
+          avatar: "",
+        });
+      })
+      .catch(() => {
+        clearToken();
+        setUser(null);
+      })
+      .finally(() => setAuthChecked(true));
+  }, []);
+
+  const isLoggedIn = !!user;
 
   // Fetch live data from the backend once logged in
   useEffect(() => {
@@ -116,24 +161,23 @@ export default function App() {
 
   // Synchronize the still-mock model states to localStorage whenever they update
   useEffect(() => {
-    localStorage.setItem("assetflow_logged_in", String(isLoggedIn));
-    localStorage.setItem("assetflow_user", JSON.stringify(user));
     localStorage.setItem("assetflow_departments", JSON.stringify(departments));
     localStorage.setItem("assetflow_categories", JSON.stringify(categories));
     localStorage.setItem("assetflow_employees", JSON.stringify(employees));
     localStorage.setItem("assetflow_activity_logs", JSON.stringify(activityLogs));
-  }, [isLoggedIn, user, departments, categories, employees, activityLogs]);
+  }, [departments, categories, employees, activityLogs]);
 
-  // Handler: Login session validation
-  const handleLoginSuccess = (validatedUser: UserProfile) => {
-    setUser(validatedUser);
-    setIsLoggedIn(true);
+  // Handler: Login/Signup session established
+  const handleAuthSuccess = (authenticatedUser: UserProfile) => {
+    setUser(authenticatedUser);
+    setCurrentTab("dashboard");
   };
 
   // Handler: Terminate session
   const handleLogout = () => {
-    setIsLoggedIn(false);
-    localStorage.removeItem("assetflow_logged_in");
+    clearToken();
+    setUser(null);
+    setAuthView("login");
   };
 
   // Handler: Reset seed database trigger (mock modules only — live data comes from the API)
@@ -142,7 +186,6 @@ export default function App() {
     setCategories(INITIAL_CATEGORIES);
     setEmployees(INITIAL_EMPLOYEES);
     setActivityLogs(INITIAL_ACTIVITY_LOGS);
-    setUser(INITIAL_USER);
     setCurrentTab("dashboard");
   };
 
@@ -245,7 +288,12 @@ export default function App() {
         return (
           <SettingsScreen
             user={user}
-            setUser={setUser}
+            setUser={(update) =>
+              setUser((prev) => {
+                if (!prev) return prev;
+                return typeof update === "function" ? (update as (p: UserProfile) => UserProfile)(prev) : update;
+              })
+            }
             onResetDatabase={handleResetDatabase}
           />
         );
@@ -258,12 +306,30 @@ export default function App() {
     }
   };
 
+  // Guard Clause: wait until we've checked for an existing valid session
+  // before deciding whether to show the app or the auth screens.
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm font-mono">
+        Checking session...
+      </div>
+    );
+  }
+
   // Guard Clause: Display Authentication panel first
-  if (!isLoggedIn) {
+  if (!user) {
+    if (authView === "signup") {
+      return (
+        <SignupScreen
+          onSignupSuccess={handleAuthSuccess}
+          onGoToLogin={() => setAuthView("login")}
+        />
+      );
+    }
     return (
       <LoginScreen
-        onLoginSuccess={handleLoginSuccess}
-        defaultUser={INITIAL_USER}
+        onLoginSuccess={handleAuthSuccess}
+        onGoToSignup={() => setAuthView("signup")}
       />
     );
   }

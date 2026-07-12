@@ -1,6 +1,39 @@
 -- AssetFlow schema: Phase 1 (Dashboard data: assets, bookings, notifications)
+-- Phase 2 (Auth: users table) added below.
 -- Run this against your Aiven MySQL database (e.g. via Aiven's console, or:
 --   mysql --host=<DB_HOST> --port=<DB_PORT> -u <DB_USER> -p --ssl-mode=REQUIRED <DB_NAME> < schema.sql
+
+-- ============================================================
+-- AUTH: users table
+-- Signup always creates role=EMPLOYEE. Only an existing ADMIN can
+-- promote someone to DEPARTMENT_HEAD or ASSET_MANAGER (done later
+-- via the Employee Directory screen, not at signup).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS users (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  name          VARCHAR(150) NOT NULL,
+  email         VARCHAR(190) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role          ENUM('EMPLOYEE','DEPARTMENT_HEAD','ASSET_MANAGER','ADMIN') NOT NULL DEFAULT 'EMPLOYEE',
+  department    VARCHAR(100),
+  status        ENUM('Active','Inactive') NOT NULL DEFAULT 'Active',
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- One-time bootstrap admin so there's somebody who can log in and start
+-- promoting Department Heads / Asset Managers from the Employee Directory.
+-- Login: admin@assetflow.com / ChangeMe123!
+-- CHANGE THIS PASSWORD IMMEDIATELY AFTER YOUR FIRST LOGIN.
+INSERT INTO users (name, email, password_hash, role, department, status)
+VALUES (
+  'System Admin',
+  'admin@assetflow.com',
+  '$2b$10$SgVzC.SVlhLrsHDDH1mEDOGyP.MThoaDrboo.ARC5C4OCvlYQ31fq',
+  'ADMIN',
+  'Administration',
+  'Active'
+)
+ON DUPLICATE KEY UPDATE email = email;
 
 CREATE TABLE IF NOT EXISTS assets (
   tag             VARCHAR(20) PRIMARY KEY,

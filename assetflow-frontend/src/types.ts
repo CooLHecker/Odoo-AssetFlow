@@ -92,10 +92,14 @@ export interface ActivityLog {
   details: string;
 }
 
+export type UserRoleCode = "EMPLOYEE" | "DEPARTMENT_HEAD" | "ASSET_MANAGER" | "ADMIN";
+
 export interface UserProfile {
+  id?: number;
   name: string;
   email: string;
   role: string;
+  roleCode?: UserRoleCode;
   department: string;
   avatar: string;
 }

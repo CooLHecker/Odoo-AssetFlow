@@ -9,47 +9,67 @@ import {
   Lock, 
   Mail, 
   ArrowRight,
-  TrendingUp,
   Server,
-  Users,
-  CheckCircle2
 } from "lucide-react";
-import { UserProfile } from "../types";
+import { UserProfile, UserRoleCode } from "../types";
+import { api, setToken } from "../api";
+
+const ROLE_LABELS: Record<UserRoleCode, string> = {
+  EMPLOYEE: "Employee",
+  DEPARTMENT_HEAD: "Department Head",
+  ASSET_MANAGER: "Asset Manager",
+  ADMIN: "Administrator",
+};
+
+interface BackendUser {
+  id: number;
+  name: string;
+  email: string;
+  role: UserRoleCode;
+  department: string | null;
+  status: string;
+}
+
+interface LoginResponse {
+  token: string;
+  user: BackendUser;
+}
 
 interface LoginScreenProps {
   onLoginSuccess: (user: UserProfile) => void;
-  defaultUser: UserProfile;
+  onGoToSignup: () => void;
 }
 
-export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreenProps) {
-  const [email, setEmail] = useState("admin@assetflow.com");
-  const [password, setPassword] = useState("••••••••");
-  const [rememberMe, setRememberMe] = useState(true);
+function toUserProfile(u: BackendUser): UserProfile {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: ROLE_LABELS[u.role] ?? u.role,
+    roleCode: u.role,
+    department: u.department ?? "Unassigned",
+    avatar: "",
+  };
+}
+
+export default function LoginScreen({ onLoginSuccess, onGoToSignup }: LoginScreenProps) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
     setIsLoading(true);
-
-    // Simulate standard secure SSO authentication
-    setTimeout(() => {
+    try {
+      const { token, user } = await api.post<LoginResponse>("/api/auth/login", { email, password });
+      setToken(token);
+      onLoginSuccess(toUserProfile(user));
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Login failed. Please try again.");
+    } finally {
       setIsLoading(false);
-      onLoginSuccess({
-        ...defaultUser,
-        email: email === "admin@assetflow.com" ? defaultUser.email : email,
-      });
-    }, 1200);
-  };
-
-  const handlePreFill = (role: "admin" | "auditor") => {
-    if (role === "admin") {
-      setEmail("admin@assetflow.com");
-      setPassword("password123");
-    } else {
-      setEmail("auditor.compliance@assetflow.com");
-      setPassword("secPass99");
     }
   };
 
@@ -84,22 +104,6 @@ export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreen
             <p className="text-slate-400 text-sm mt-3 leading-relaxed">
               Track, allocate, maintain, and audit organizational physical assets, fleet vehicles, and digital equipment with cryptographic precision.
             </p>
-
-            {/* Micro stats banner */}
-            <div className="grid grid-cols-3 gap-3 mt-8">
-              <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
-                <span className="text-[10px] text-slate-500 font-mono block uppercase">Active Nodes</span>
-                <span className="text-base font-bold text-white font-mono mt-1 block">4,812</span>
-              </div>
-              <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
-                <span className="text-[10px] text-slate-500 font-mono block uppercase">Uptime Rate</span>
-                <span className="text-base font-bold text-emerald-400 font-mono mt-1 block">99.98%</span>
-              </div>
-              <div className="bg-slate-900/60 p-3 rounded-lg border border-slate-800">
-                <span className="text-[10px] text-slate-500 font-mono block uppercase">Compliance</span>
-                <span className="text-base font-bold text-teal-400 font-mono mt-1 block">ISO-EAM</span>
-              </div>
-            </div>
           </div>
 
           {/* Footer of login branding */}
@@ -110,13 +114,13 @@ export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreen
 
         </div>
 
-        {/* Right pane: SSO and local authentication form */}
+        {/* Right pane: authentication form */}
         <div className="w-full md:w-1/2 p-8 sm:p-12 bg-slate-900/40 flex flex-col justify-center">
           
           <div className="mb-6">
             <h3 className="text-xl font-bold text-white tracking-tight">Identity Verification</h3>
             <p className="text-slate-400 text-xs mt-1">
-              Enter your credentials or use standard pre-set profiles to log in.
+              Enter your credentials to log in.
             </p>
           </div>
 
@@ -145,9 +149,9 @@ export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreen
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label htmlFor="password-input" className="text-xs font-semibold text-slate-300">
-                  Authentication Token / Password
+                  Password
                 </label>
-                <a href="#forgot" onClick={(e) => { e.preventDefault(); alert("Self-service reset is managed by Azure AD/Okta directory admins."); }} className="text-[10px] font-mono text-teal-400 hover:underline">
+                <a href="#forgot" onClick={(e) => { e.preventDefault(); alert("Forgot-password self-service is coming in a later build. Contact your Admin to reset your password for now."); }} className="text-[10px] font-mono text-teal-400 hover:underline">
                   Forgot?
                 </a>
               </div>
@@ -163,21 +167,6 @@ export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreen
                   className="w-full bg-slate-950/60 border border-slate-800 hover:border-slate-700 focus:border-teal-500 rounded-lg py-2 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none transition-all"
                 />
               </div>
-            </div>
-
-            {/* Remember & SSO Option */}
-            <div className="flex items-center justify-between text-xs py-1">
-              <label className="flex items-center gap-2 text-slate-400 cursor-pointer">
-                <input
-                  id="remember-me-checkbox"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="accent-teal-500 h-3.5 w-3.5 rounded border-slate-800 bg-slate-950 text-teal-500 focus:ring-0 focus:ring-offset-0"
-                />
-                Remember this device
-              </label>
-              <span className="text-slate-500">MFA Enabled</span>
             </div>
 
             {/* Error Message */}
@@ -200,7 +189,7 @@ export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreen
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Initializing Session...
+                  Verifying...
                 </>
               ) : (
                 <>
@@ -211,31 +200,17 @@ export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreen
             </button>
           </form>
 
-          {/* Quick Sandbox Pre-fills */}
-          <div className="mt-8 pt-6 border-t border-slate-800">
-            <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block mb-2">
-              Sandbox Testing Credentials
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                id="prefill-admin-btn"
-                type="button"
-                onClick={() => handlePreFill("admin")}
-                className="bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-md text-xs text-slate-300 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <div className="h-1.5 w-1.5 rounded-full bg-teal-400"></div>
-                Admin Manager
-              </button>
-              <button
-                id="prefill-auditor-btn"
-                type="button"
-                onClick={() => handlePreFill("auditor")}
-                className="bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-md text-xs text-slate-300 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <div className="h-1.5 w-1.5 rounded-full bg-violet-400"></div>
-                Auditor Compliance
-              </button>
-            </div>
+          {/* Signup link */}
+          <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+            <span className="text-xs text-slate-400">Don't have an account? </span>
+            <button
+              id="go-to-signup-button"
+              type="button"
+              onClick={onGoToSignup}
+              className="text-xs font-semibold text-teal-400 hover:underline cursor-pointer"
+            >
+              Create one
+            </button>
           </div>
 
         </div>
@@ -243,3 +218,4 @@ export default function LoginScreen({ onLoginSuccess, defaultUser }: LoginScreen
     </div>
   );
 }
+
