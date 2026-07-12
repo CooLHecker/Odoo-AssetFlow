@@ -22,9 +22,9 @@ const pool = mysql.createPool({
   queueLimit: 0,
   connectTimeout: 20000,
   ssl:
-    String(process.env.DB_SSL).toLowerCase() === "true"
-      ? { rejectUnauthorized: true }
-      : undefined,
+  String(process.env.DB_SSL).toLowerCase() === "true"
+    ? { rejectUnauthorized: false }
+    : undefined,
 });
 
 module.exports = pool;
