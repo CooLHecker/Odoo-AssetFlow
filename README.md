@@ -41,17 +41,29 @@ Instead of managing assets through spreadsheets, AssetFlow gives admins and staf
 ## Project Structure
 
 Odoo-AssetFlow/
+
+
 ├── assetflow-frontend/       # React + Vite client
+
 │   └── src/
+
 │       ├── components/       # Screen-level components (Dashboard, Directory, Allocation, Booking, etc.)
+
 │       ├── data.ts            # Seed/demo data
+
 │       ├── types.ts           # Shared TypeScript types
+
 │       └── App.tsx            # Root component & state management
+
 │
 └── assetflow-backend/        # Express API
+
 └── src/
+
 ├── routes/            # Feature-based route modules
+
 ├── config/db.js        # MySQL connection pool
+
 └── app.js              # Express app setup
 
 
