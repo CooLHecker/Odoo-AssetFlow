@@ -9,6 +9,7 @@ import {
   Bell, 
   HelpCircle, 
   RefreshCw,
+  Globe,
   Settings,
   SlidersHorizontal
 } from "lucide-react";
@@ -130,6 +131,16 @@ export default function TopNavBar({
           >
             <Settings className="h-4.5 w-4.5" />
           </button>
+
+          <a
+            href="https://ai.studio/build"
+            target="_blank"
+            rel="noreferrer"
+            className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 rounded-lg transition-colors"
+            title="Enterprise Portal"
+          >
+            <Globe className="h-4.5 w-4.5" />
+          </a>
         </div>
 
         {/* Mini Profile Display */}
