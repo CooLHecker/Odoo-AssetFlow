@@ -4,26 +4,24 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { 
+import {
   INITIAL_USER,
-  INITIAL_ASSETS,
   INITIAL_DEPARTMENTS,
   INITIAL_CATEGORIES,
   INITIAL_EMPLOYEES,
-  INITIAL_RESERVATIONS,
-  INITIAL_NOTIFICATIONS,
   INITIAL_ACTIVITY_LOGS
 } from "./data";
-import { 
-  Asset, 
-  Department, 
-  AssetCategory, 
-  Employee, 
-  Reservation, 
-  NotificationItem, 
-  ActivityLog, 
-  UserProfile 
+import {
+  Asset,
+  Department,
+  AssetCategory,
+  Employee,
+  Reservation,
+  NotificationItem,
+  ActivityLog,
+  UserProfile
 } from "./types";
+import { api } from "./api";
 
 // Import Modular Screen Components
 import Sidebar from "./components/Sidebar";
@@ -39,7 +37,7 @@ import NotificationsScreen from "./components/NotificationsScreen";
 import SettingsScreen from "./components/SettingsScreen";
 
 export default function App() {
-  // Session Authentication state
+  // Session Authentication state (still local/mock — auth screen not wired up yet)
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     const saved = localStorage.getItem("assetflow_logged_in");
     return saved === "true";
@@ -50,12 +48,14 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_USER;
   });
 
-  // Master telemetry databases with LocalStorage sync
-  const [assets, setAssets] = useState<Asset[]>(() => {
-    const saved = localStorage.getItem("assetflow_assets");
-    return saved ? JSON.parse(saved) : INITIAL_ASSETS;
-  });
+  // Live data — now fetched from the backend/MySQL instead of mock + localStorage
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState<boolean>(true);
+  const [dataError, setDataError] = useState<string | null>(null);
 
+  // Not yet connected to the backend — still mock/localStorage until those screens are built
   const [departments, setDepartments] = useState<Department[]>(() => {
     const saved = localStorage.getItem("assetflow_departments");
     return saved ? JSON.parse(saved) : INITIAL_DEPARTMENTS;
@@ -71,16 +71,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_EMPLOYEES;
   });
 
-  const [reservations, setReservations] = useState<Reservation[]>(() => {
-    const saved = localStorage.getItem("assetflow_reservations");
-    return saved ? JSON.parse(saved) : INITIAL_RESERVATIONS;
-  });
-
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const saved = localStorage.getItem("assetflow_notifications");
-    return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
-  });
-
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() => {
     const saved = localStorage.getItem("assetflow_activity_logs");
     return saved ? JSON.parse(saved) : INITIAL_ACTIVITY_LOGS;
@@ -91,37 +81,48 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // Synchronize dynamic model states to localStorage whenever they update
+  // Fetch live data from the backend once logged in
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    let cancelled = false;
+    setIsDataLoading(true);
+    setDataError(null);
+
+    Promise.all([
+      api.get<Asset[]>("/api/assets"),
+      api.get<Reservation[]>("/api/bookings"),
+      api.get<NotificationItem[]>("/api/notifications"),
+    ])
+      .then(([assetsData, bookingsData, notificationsData]) => {
+        if (cancelled) return;
+        setAssets(assetsData);
+        setReservations(bookingsData);
+        setNotifications(notificationsData);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("Failed to load live data:", err);
+        setDataError("Could not reach the AssetFlow API. Check your connection or try again.");
+      })
+      .finally(() => {
+        if (!cancelled) setIsDataLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
+
+  // Synchronize the still-mock model states to localStorage whenever they update
   useEffect(() => {
     localStorage.setItem("assetflow_logged_in", String(isLoggedIn));
     localStorage.setItem("assetflow_user", JSON.stringify(user));
-    localStorage.setItem("assetflow_assets", JSON.stringify(assets));
     localStorage.setItem("assetflow_departments", JSON.stringify(departments));
     localStorage.setItem("assetflow_categories", JSON.stringify(categories));
     localStorage.setItem("assetflow_employees", JSON.stringify(employees));
-    localStorage.setItem("assetflow_reservations", JSON.stringify(reservations));
-    localStorage.setItem("assetflow_notifications", JSON.stringify(notifications));
     localStorage.setItem("assetflow_activity_logs", JSON.stringify(activityLogs));
-  }, [isLoggedIn, user, assets, departments, categories, employees, reservations, notifications, activityLogs]);
-
-  // Handle telemetry numbers synchronization (update counts in category object)
-  useEffect(() => {
-    setCategories(prev => prev.map(cat => {
-      const matchCount = assets.filter(a => a.category.toLowerCase() === cat.name.toLowerCase() || a.category.toLowerCase() === cat.id.toLowerCase()).length;
-      // Use fallback base count to make bento rings visually full
-      const baseMap: Record<string, number> = {
-        "computing": 340,
-        "fleet": 15,
-        "machinery": 50,
-        "peripherals": 150
-      };
-      const base = baseMap[cat.id] || 0;
-      return {
-        ...cat,
-        assetCount: base + matchCount
-      };
-    }));
-  }, [assets]);
+  }, [isLoggedIn, user, departments, categories, employees, activityLogs]);
 
   // Handler: Login session validation
   const handleLoginSuccess = (validatedUser: UserProfile) => {
@@ -135,14 +136,11 @@ export default function App() {
     localStorage.removeItem("assetflow_logged_in");
   };
 
-  // Handler: Reset seed database trigger
+  // Handler: Reset seed database trigger (mock modules only — live data comes from the API)
   const handleResetDatabase = () => {
-    setAssets(INITIAL_ASSETS);
     setDepartments(INITIAL_DEPARTMENTS);
     setCategories(INITIAL_CATEGORIES);
     setEmployees(INITIAL_EMPLOYEES);
-    setReservations(INITIAL_RESERVATIONS);
-    setNotifications(INITIAL_NOTIFICATIONS);
     setActivityLogs(INITIAL_ACTIVITY_LOGS);
     setUser(INITIAL_USER);
     setCurrentTab("dashboard");
@@ -153,15 +151,14 @@ export default function App() {
     setIsRefreshing(true);
     setTimeout(() => {
       setIsRefreshing(false);
-      
-      // Occasionally introduce an automated micro activity log to simulate operational updates!
+
       const randomActivities = [
         "Network telemetry node CL-04 pinged successfully.",
         "Automatic database compliance check validated 100% security rules.",
         "ISO backup scheduled task executed flawlessly."
       ];
       const randomText = randomActivities[Math.floor(Math.random() * randomActivities.length)];
-      
+
       const refreshLog: ActivityLog = {
         id: `LOG-REF-${Math.floor(100 + Math.random() * 900)}`,
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
@@ -264,33 +261,33 @@ export default function App() {
   // Guard Clause: Display Authentication panel first
   if (!isLoggedIn) {
     return (
-      <LoginScreen 
-        onLoginSuccess={handleLoginSuccess} 
-        defaultUser={INITIAL_USER} 
+      <LoginScreen
+        onLoginSuccess={handleLoginSuccess}
+        defaultUser={INITIAL_USER}
       />
     );
   }
 
   return (
     <div className="flex h-screen bg-slate-100 overflow-hidden text-slate-800 font-sans antialiased">
-      
+
       {/* Side Control panel */}
-      <Sidebar 
-        currentTab={currentTab} 
-        setCurrentTab={setCurrentTab} 
-        user={user} 
+      <Sidebar
+        currentTab={currentTab}
+        setCurrentTab={setCurrentTab}
+        user={user}
         onLogout={handleLogout}
         unreadCount={unreadCount}
       />
 
       {/* Main Screen Layout Container */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        
+
         {/* Top Control Header */}
-        <TopNavBar 
-          currentTab={currentTab} 
-          user={user} 
-          unreadCount={unreadCount} 
+        <TopNavBar
+          currentTab={currentTab}
+          user={user}
+          unreadCount={unreadCount}
           setCurrentTab={setCurrentTab}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -300,7 +297,18 @@ export default function App() {
 
         {/* Dynamic Canvas View Scroller */}
         <main className="flex-1 overflow-y-auto p-8 bg-slate-50 relative">
-          {renderViewContent()}
+          {dataError && (
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg">
+              {dataError}
+            </div>
+          )}
+          {isDataLoading ? (
+            <div className="flex items-center justify-center h-full text-slate-400 text-sm font-mono">
+              Loading live data...
+            </div>
+          ) : (
+            renderViewContent()
+          )}
         </main>
 
       </div>
