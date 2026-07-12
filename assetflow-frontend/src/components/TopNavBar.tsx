@@ -9,7 +9,6 @@ import {
   Bell, 
   HelpCircle, 
   RefreshCw,
-  Globe,
   Settings,
   SlidersHorizontal
 } from "lucide-react";
@@ -131,8 +130,7 @@ export default function TopNavBar({
           >
             <Settings className="h-4.5 w-4.5" />
           </button>
-
-          
+        </div>
 
         {/* Mini Profile Display */}
         <div className="flex items-center gap-3">
@@ -143,7 +141,7 @@ export default function TopNavBar({
           <img 
             src={user.avatar} 
             alt={user.name} 
-            className="h-0 w-0 rounded-full object-cover ring-2 ring-teal-500/20"
+            className="h-8.5 w-8.5 rounded-full object-cover ring-2 ring-teal-500/20"
             referrerPolicy="no-referrer"
           />
         </div>
