@@ -1,0 +1,6 @@
+{
+  "name": "AssetFlow",
+  "description": "An enterprise-grade Enterprise Asset Management (EAM) platform to track, allocate, and maintain organizational physical and digital assets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
